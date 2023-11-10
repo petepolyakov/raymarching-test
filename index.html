@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Three.js Liquid in Glass with Ray Marching</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+
+// Set up the scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xeeeeee);
+
+// Set up the camera
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.z = 2;
+
+// Set up the renderer
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Custom ShaderMaterial using ray marching
+const liquidMaterial = new THREE.ShaderMaterial({
+    vertexShader: `
+        void main() {
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform float time;
+        uniform vec3 color;
+        float sphereSDF(vec3 p) {
+            return length(p) - 1.0; // Sphere SDF with radius 1
+        }
+        void main() {
+            vec3 rayOrigin = cameraPosition;
+            vec3 rayDirection = normalize(position - cameraPosition);
+            float marchDistance = 0.0;
+            for (int i = 0; i < 100; i++) {
+                vec3 p = rayOrigin + marchDistance * rayDirection;
+                float dist = sphereSDF(p);
+                if (dist < 0.001) {
+                    gl_FragColor = vec4(color, 1.0);
+                    return;
+                }
+                marchDistance += dist;
+                if (marchDistance > 100.0) break;
+            }
+            discard;
+        }
+    `,
+    uniforms: {
+        time: { value: 0.0 },
+        color: { value: new THREE.Color(0x3498db) } // Replace with your liquid color
+    }
+});
+
+// Sphere geometry
+const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
+const liquidSphere = new THREE.Mesh(sphereGeometry, liquidMaterial);
+scene.add(liquidSphere);
+
+// Animation loop
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    // Update shader uniform
+    liquidMaterial.uniforms.time.value = clock.getElapsedTime();
+
+    renderer.render(scene, camera);
+}
+
+animate();
+
+// Handle window resize
+window.addEventListener('resize', onWindowResize, false);
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+</script>
+</body>
+</html>
